@@ -14,7 +14,8 @@ from ai_processor import (
     fetch_transcript,
     load_or_build_index,
     generate_answer,
-    GENERATION_MODEL,
+    FAST_MODEL,
+    HQ_MODEL,
 )
 import vector_store
 
@@ -27,7 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +46,7 @@ class ProcessVideoResponse(BaseModel):
 class AskQuestionRequest(BaseModel):
     video_id: str
     question: str
+    high_quality: bool = False
 
 class AskQuestionResponse(BaseModel):
     answer: str
@@ -62,7 +64,7 @@ def serve_frontend():
 
 @app.get("/active_model")
 def active_model():
-    return {"model": GENERATION_MODEL}
+    return {"fast_model": FAST_MODEL, "hq_model": HQ_MODEL}
 
 
 @app.post("/process_video", response_model=ProcessVideoResponse)
@@ -104,5 +106,6 @@ def ask_question(body: AskQuestionRequest):
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    answer = generate_answer(body.question, chunks)
-    return AskQuestionResponse(answer=answer, model=GENERATION_MODEL)
+    model = HQ_MODEL if body.high_quality else FAST_MODEL
+    answer = generate_answer(body.question, chunks, model=model)
+    return AskQuestionResponse(answer=answer, model=model)

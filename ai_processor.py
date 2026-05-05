@@ -65,9 +65,10 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-GENERATION_MODEL = os.getenv("GENERATION_MODEL", "gemini-2.5-flash")
-# Gemma models don't support system_instruction — it must be prepended into the prompt
-_SUPPORTS_SYSTEM_INSTRUCTION = "gemma" not in GENERATION_MODEL.lower()
+FAST_MODEL = os.getenv("FAST_MODEL", "gemini-2.5-flash")
+HQ_MODEL   = os.getenv("HQ_MODEL",   "gemini-3-flash")
+# Keep for backward-compat with CLI usage
+GENERATION_MODEL = FAST_MODEL
 
 
 class GeminiEmbeddings(Embeddings):
@@ -170,12 +171,12 @@ def load_or_build_index(transcript: str, video_id: str) -> None:
     print("Index built and saved.")
 
 
-def generate_answer(question: str, context_chunks: list[Document]) -> str:
+def generate_answer(question: str, context_chunks: list[Document], model: str | None = None) -> str:
     """
     Send the retrieved context and user question to the configured model.
-    Gemma models don't support system_instruction, so the instruction is
-    prepended directly into the prompt for those models.
+    Defaults to FAST_MODEL; pass HQ_MODEL for high-quality mode.
     """
+    model = model or FAST_MODEL
     context = "\n\n".join(doc.page_content for doc in context_chunks)
 
     system_instruction = (
@@ -185,7 +186,7 @@ def generate_answer(question: str, context_chunks: list[Document]) -> str:
         "'I cannot answer this based on the provided video context.'"
     )
 
-    if _SUPPORTS_SYSTEM_INSTRUCTION:
+    if "gemma" not in model.lower():
         prompt = f"Transcript excerpts:\n{context}\n\nQuestion: {question}"
         config = types.GenerateContentConfig(system_instruction=system_instruction)
     else:
@@ -193,7 +194,7 @@ def generate_answer(question: str, context_chunks: list[Document]) -> str:
         config = types.GenerateContentConfig()
 
     response = client.models.generate_content(
-        model=GENERATION_MODEL,
+        model=model,
         contents=prompt,
         config=config,
     )
